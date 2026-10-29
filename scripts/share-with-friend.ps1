@@ -7,8 +7,7 @@
   2. Starts a Cloudflare quick tunnel to it.
   3. Waits for the https://*.trycloudflare.com address, checks it works, then prints and
      copies a ready-to-send message (viewer link + WebSocket address).
-  Friends get a READ-ONLY session: the server withholds the operator token from tunnelled
-  requests. Everything keeps running on your hardware; closing this window stops the link.
+  Friends get FULL operator access (no token) by default; pass -ReadOnly to withhold it. Everything keeps running on your hardware; closing this window stops the link.
   The address changes every time you run this.
 
 .EXAMPLE
@@ -16,7 +15,7 @@
   .\scripts\share-with-friend.ps1 -Fleet 100 -Seed 7
   .\scripts\share-with-friend.ps1 -NoTunnel      # local test only, no public link
 #>
-param([int]$Port = 8787, [int]$Seed = 42, [int]$Fleet = 50, [switch]$NoTunnel)
+param([int]$Port = 8787, [int]$Seed = 42, [int]$Fleet = 50, [switch]$NoTunnel, [switch]$ReadOnly)
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot  # repository root (scripts/..)
 $runtime = Join-Path $root '.cache\operations'
@@ -50,7 +49,7 @@ try {
         if (-not (Test-Path -LiteralPath $world)) { & $python (Join-Path $root 'tools\prepare_operations_map.py') }
         Write-Host "Starting simulator ($Fleet drones, seed $Seed)..."
         $server = Start-Process -FilePath $python -WorkingDirectory $root -WindowStyle Hidden -PassThru `
-            -ArgumentList @('-u', '-m', 'swarm_ops.server', '--port', $Port, '--seed', $Seed, '--fleet', $Fleet) `
+            -ArgumentList (@('-u', '-m', 'swarm_ops.server', '--port', $Port, '--seed', $Seed, '--fleet', $Fleet) + $(if ($ReadOnly) { @() } else { @('--public-demo') })) `
             -RedirectStandardOutput (Join-Path $runtime 'server.stdout.log') -RedirectStandardError (Join-Path $runtime 'server.stderr.log')
         $started += $server
         $deadline = (Get-Date).AddSeconds(40)
@@ -96,7 +95,7 @@ try {
 
     $ws = ($public -replace '^https://', 'wss://') + '/ops/ws'
     $message = @"
-Drone swarm live simulation (read-only, runs on my laptop)
+Drone swarm live simulation ($(if ($ReadOnly) { 'read-only' } else { 'full control, no token needed' }), runs on my laptop)
 
 Open in a browser:   $public
 WebSocket feed:      $ws

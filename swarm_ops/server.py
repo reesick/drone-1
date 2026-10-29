@@ -381,7 +381,7 @@ async def main_async(args):
     setup_logging()
     engine = OperationsSimulation(world=world, seed=args.seed, fleet_size=args.fleet, scenario=scenario, coordination=args.coordination)
     server = OperationsServer(engine, host=args.host, port=args.port, frame_hz=args.frame_hz,
-                              control_token=os.environ.get('OPS_CONTROL_TOKEN'))
+                              control_token=os.environ.get('OPS_CONTROL_TOKEN'), public_demo=args.public_demo)
     runtime_dir = ROOT / '.cache' / 'operations'
     runtime_dir.mkdir(parents=True, exist_ok=True)
     # Private local operator link; the token is never returned to public tunnel viewers.
@@ -403,6 +403,9 @@ def main():
     parser.add_argument('--seed', type=int, default=42)
     parser.add_argument('--fleet', type=int, default=20)
     parser.add_argument('--frame-hz', type=int, default=10)
+    parser.add_argument('--public-demo', action='store_true',
+                        default=os.environ.get('OPS_PUBLIC_DEMO', '').strip().lower() in ('1', 'true', 'yes'),
+                        help='anyone who opens the link gets full operator control, no token (also OPS_PUBLIC_DEMO=true)')
     parser.add_argument('--world', choices=('pune-district', 'pcmc-region'), default='pune-district')
     parser.add_argument('--scenario', default=None, help='starting scenario id (see /ops/scenarios)')
     parser.add_argument('--coordination', choices=('central', 'decentralized', 'orchestrated'), default='central',
