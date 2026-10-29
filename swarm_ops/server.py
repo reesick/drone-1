@@ -25,6 +25,7 @@ from swarm_ops.telemetry import Telemetry, setup_logging
 from websockets.asyncio.server import serve
 from websockets.datastructures import Headers
 from websockets.exceptions import ConnectionClosed
+from websockets.extensions.permessage_deflate import ServerPerMessageDeflateFactory
 from websockets.http11 import Response
 
 ROOT = Path(__file__).resolve().parents[1]  # repository root (swarm_ops/..)
@@ -34,6 +35,7 @@ COMMANDS = {'random_scenario', 'scenario', 'pause', 'resume', 'speed', 'reset',
 INTEGRATION_COMMANDS = {'external_resource_update', 'agency_request', 'control', 'orchestrate_incident', 'assign', 'unassign',
                         'recall_drone', 'cancel_incident', 'close_incident', 'update_incident',
                         'request_situation', 'node_attach', 'node_detach', 'node_order', 'node_post', 'set_coordination'}
+IDLE_FRAME_HZ = 1  # frame rate while nobody is connected; telemetry samples drones at 1 Hz and events stay inside the 180-entry window
 OLD_WEB_PATHS = {'/web/operations.html': '/web/ops/operations.html',
                  '/web/operations.css': '/web/ops/operations.css',
                  '/web/operations.js': '/web/ops/operations.js',
@@ -302,17 +304,21 @@ class OperationsServer:
         return ack
 
     async def ticker(self):
-        last, next_frame = time.monotonic(), time.monotonic()
+        last = last_frame = next_frame = time.monotonic()
         while True:
             started = time.monotonic()
             dt = min(.25, max(0, started - last))
             last = started
             self.engine.step(dt)
             self._step_ms = (time.monotonic() - started) * 1000
+            if self.clients:  # a viewer that connects while idle gets full rate straight away
+                next_frame = min(next_frame, last_frame + 1 / self.frame_hz)
             if started >= next_frame:
-                next_frame = started + 1 / self.frame_hz
+                last_frame = started
+                next_frame = started + 1 / (self.frame_hz if self.clients else IDLE_FRAME_HZ)
                 self.seq += 1
-                state = self.engine.snapshot(include_world=False)
+                # Live view, no deep copy: everything below serialises or copies it before the next await.
+                state = self.engine.snapshot(include_world=False, detach=False)
                 if any(client['run_id'] != state['run_id'] for client in self.clients.values()):
                     state['world'] = self.engine.world
                 if state['run_id'] != self._journal_run:
@@ -338,7 +344,9 @@ class OperationsServer:
     async def start(self):
         self._listener = await serve(self.websocket, self.host, self.port, process_request=self.http,
                                      max_size=16384, max_queue=8, ping_interval=20, ping_timeout=30,
-                                     close_timeout=3, compression='deflate', write_limit=32768)
+                                     close_timeout=3, write_limit=32768,
+                                     # Each client deflates every frame separately; level 1 is ~3x cheaper than the default 6.
+                                     extensions=[ServerPerMessageDeflateFactory(compress_settings={'level': 1})])
         self.port = self._listener.sockets[0].getsockname()[1]
         self._tick_task = asyncio.create_task(self.ticker())
         if hasattr(self.engine, 'nodes'):

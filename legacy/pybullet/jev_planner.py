@@ -31,6 +31,12 @@ def load_env(path=None):
                 os.environ.setdefault(key, value.strip().strip('"\''))
 
 
+def jev_enabled():
+    """Master switch: JEV_ENABLED=yes|true|1|on (environment or .env). Default is off, so no Jev API calls are made."""
+    load_env()
+    return os.environ.get('JEV_ENABLED', 'no').strip().lower() in ('1', 'yes', 'true', 'on')
+
+
 class JevPlanner(AIPlanner):
     def __init__(self, model='jev-latest', transport=None, max_requests=600, url=URL):
         load_env()

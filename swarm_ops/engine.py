@@ -2484,12 +2484,14 @@ class OperationsSimulation:
         if state=="charging":return "charge"
         return "idle"
 
-    def snapshot(self,include_world=True):
+    def snapshot(self,include_world=True,detach=True):
+        """Full state view. ``detach=False`` skips the deep copy (about 70% of the cost at 100 drones): the result
+        shares lists/dicts with the engine, so it is only safe to serialise immediately, before the next ``step``."""
         active=[i for i in self.incidents if i["status"]!="resolved"]
         for incident in self.incidents:
             led=self.nodes.orchestrator.ledger.get(incident["id"])
             if led and led.get("plan"):incident["plan"]=led["plan"]
-        return copy.deepcopy({"schema_version":2,"run_id":self.run_id,"revision":self.revision,"t":round(self.t,3),
+        view={"schema_version":2,"run_id":self.run_id,"revision":self.revision,"t":round(self.t,3),
             "paused":self.paused,"speed":self.speed,"scenario":self.scenario,"anchor":ANCHOR,"flood":self.flood,"road_conditions":self.road_conditions,
             **({"world":self.world} if include_world else {}),
             "drones":[self._drone_view(d) for d in self.drones],
@@ -2510,7 +2512,8 @@ class OperationsSimulation:
                 "open_incidents":len(active),"resolved_incidents":len(self.incidents)-len(active),
                 "available_resources":sum(r["state"]=="available" for r in self.resources),
                 "handoffs":sum(i["handed_over"] for i in self.incidents),"supply_drops":sum(len(i["supplied"]) for i in self.incidents),
-                "faults":self._faults,"launched":self._launched() if self.docks else None,"dispatch_cap":self._cap_total() if self.docks else None,"dispatch_cap_per_incident":self._cap_per_incident() if self.docks else None,"covered_patches":sum(c["last"] is not None for c in self.search_cells.values()),"total_patches":len(self.search_cells),"simulation_only":True,"external_ground":self.external_ground,"agency":self._agency_metrics(),"allocation_mode":{"central":"drone bids, coordinator auction","decentralized":"decentralized CBBA consensus among drones (no central award)","orchestrated":"DisruptionOps assigns drones and roles"}[self.coordination["mode"]]+" + orchestrator dispatch to agency nodes over the message bus"}})
+                "faults":self._faults,"launched":self._launched() if self.docks else None,"dispatch_cap":self._cap_total() if self.docks else None,"dispatch_cap_per_incident":self._cap_per_incident() if self.docks else None,"covered_patches":sum(c["last"] is not None for c in self.search_cells.values()),"total_patches":len(self.search_cells),"simulation_only":True,"external_ground":self.external_ground,"agency":self._agency_metrics(),"allocation_mode":{"central":"drone bids, coordinator auction","decentralized":"decentralized CBBA consensus among drones (no central award)","orchestrated":"DisruptionOps assigns drones and roles"}[self.coordination["mode"]]+" + orchestrator dispatch to agency nodes over the message bus"}}
+        return copy.deepcopy(view) if detach else view
 
 
 # Plug-in scenarios/worlds (swarm_ops/scenarios/*) register themselves on import. Imported last so

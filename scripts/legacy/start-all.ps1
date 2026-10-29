@@ -1,5 +1,5 @@
-# One command: stops old runs, starts the Jev-driven swarm + public tunnel, prints the link to share.
-param([int]$Port = 8765, [switch]$NoJev)
+# One command: stops old runs, starts the rule-based swarm (Jev API calls only with -Jev) + public tunnel, prints the link to share.
+param([int]$Port = 8765, [switch]$Jev)
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)  # repository root (scripts/legacy/..)
 Get-CimInstance Win32_Process | Where-Object { $_.ProcessId -ne $PID -and ($_.CommandLine -like '*run-web.ps1*' -or $_.Name -in 'python.exe','cloudflared.exe') } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
@@ -26,7 +26,8 @@ Write-Host " SEND THIS LINK TO YOUR FRIEND:  $url" -ForegroundColor Green
 Write-Host " Your own view:                  http://localhost:$Port" -ForegroundColor Green
 Write-Host "=====================================================`n" -ForegroundColor Green
 try {
-    if ($NoJev) { & (Join-Path $PSScriptRoot 'run-web.ps1') -Port $Port } else { & (Join-Path $PSScriptRoot 'run-web.ps1') -Port $Port -AI jev }
+    if ($Jev) { $env:JEV_ENABLED = 'yes' }
+    if ($Jev -or $env:JEV_ENABLED -match '^(1|yes|true|on)$') { & (Join-Path $PSScriptRoot 'run-web.ps1') -Port $Port -AI jev } else { & (Join-Path $PSScriptRoot 'run-web.ps1') -Port $Port }
 } finally {
     if (-not $tunnel.HasExited) { Stop-Process -Id $tunnel.Id -Force }
 }

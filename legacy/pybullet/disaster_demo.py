@@ -13,7 +13,7 @@ from swarm_mission import SwarmMission
 from agentic_swarm import AgenticSwarm
 from city_map import load_city, PLACEMENTS
 from ai_planner import AIPlanner
-from jev_planner import JevPlanner
+from jev_planner import JevPlanner, jev_enabled
 REPO_ROOT=Path(__file__).resolve().parents[2]
 RESULTS=Path(__file__).resolve().parent/'results'
 RESULTS.mkdir(exist_ok=True)
@@ -35,7 +35,10 @@ args = parser.parse_args()
 if args.ai and args.scripted:
     parser.error('--ai and --scripted cannot be combined')
 try:
-    if args.ai=='jev':
+    if args.ai=='jev' and not jev_enabled():
+        print('Jev is switched off (JEV_ENABLED is not yes): running the rule-based agents, no API calls.',flush=True)
+        ai=None
+    elif args.ai=='jev':
         ai=JevPlanner(args.ai_model or 'jev-latest',max_requests=args.ai_max_requests or 600)
     else:
         ai=AIPlanner(args.ai,args.ai_model,max_requests=args.ai_max_requests or 120) if args.ai else None

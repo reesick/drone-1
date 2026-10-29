@@ -5,6 +5,7 @@ does O(1) checks and a queue put; derivation, validation and disk I/O run on one
 """
 from __future__ import annotations
 
+import copy
 import logging
 import os
 import platform
@@ -83,7 +84,8 @@ class Telemetry:
         if new_run or msgs or decs or sim_t >= self._next_t or last_event != self._last_event or last_sig != self._last_sig:
             self._next_t = sim_t + self.drone_period
             self._last_event, self._last_sig = last_event, last_sig
-            item = ('state', state, time.time(), msgs, decs, self._manifest_info(state, engine) if new_run else None)
+            # The recorder thread reads this later, so it gets its own copy; callers may pass a live (undetached) view.
+            item = ('state', copy.deepcopy(state), time.time(), msgs, decs, self._manifest_info(state, engine) if new_run else None)
             try:
                 self._q.put_nowait(item)
             except queue.Full:
